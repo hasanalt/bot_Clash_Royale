@@ -86,4 +86,41 @@ class Bot_main:
         slide = line // 3
         line = (number // 3) % 4
         _number = number % 4
-        logger.debug(f'Bot.requestCard {id_card}, {line}, {
+        logger.debug(f'Bot.requestCard {id_card}, {line}, {slide}, {_number}')
+        self.run_command('click', 75 + _number * 175, 700 + slide * 140)
+        self.run_command('click', 75 + line * 175, 700 + slide * 140)
+        self.run_command('click', 660, 40)
+
+    def reboot_android(self):
+        logger.debug('Bot.reboot_android')
+        try:
+            subprocess.run('adb reboot', shell=True)
+        except Exception as e:
+            logger.error(f'Error rebooting Android: {e}')
+
+    def startBot(self, battle_mode, number_of_battles):
+        logger.debug(f'Bot.startBot {battle_mode}, {number_of_battles}')
+        for i in range(number_of_battles):
+            logger.debug(f'Bot.startBot iteration {i+1}')
+            self.run_command('click', 570, 1000)
+            sleep(3)
+            self.runBattleMode(battle_mode)
+            if battle_mode == 'mode_1' or battle_mode == 'mode_2':
+                self.runBattleGlobal()
+            elif battle_mode == '2X2':
+                self.runBattleEvent()
+            self.rewardLimit()
+            self.skipLimit()
+            for number in range(4):
+                self.getRewardChest(number)
+                self.openChest(number)
+            self.openChest_2(False)
+            self.returnHome()
+            self.goToClanChat()
+            self.openCloseClanChat()
+            self.requestCard(i)
+            self.returnHome()
+            if i == 0:
+                self.reboot_android()
+            else:
+                sleep(random.randint(30, 60))
