@@ -1,65 +1,62 @@
 import io
 import random
 import json
-
-#import neural_networks
-
 from PIL import Image
 from loguru import logger
-
 import time
-
 import os
-
-#recognitionCard = neural_networks.CardInBatlle()
-#recognitionElixir = neural_networks.ElixirInBatlle()
 
 with open("config/trigger.json", encoding='UTF-8') as f:
     triggers_json = json.load(f)
 
 class ImageTriggers:
     def __init__(self, open_chest, requested_card, open_PR=False, debug=False):
-        self.index2X2 = True
-        self.image = None
         self.open_chest = open_chest
         self.open_PR = open_PR
         self.requested_card = requested_card
-        self.m = []
         self.debug = debug
-        self.dict_func = {
-            '_cheakTimeInBatlle': self._cheakTimeInBatlle
-            , '_getNumeberCrown': self._getNumeberCrown
-            , '_getTriggerOpenChest': self._getTriggerOpenChest
-            , '_getTriggerOpenedChest': self._getTriggerOpenedChest
-            , '_getTextError': self._getTextError
-            , '_getCardsInBatlle': self._getCardsInBatlle
-            , '_getElixir': self._getElixir
-            , '_get_tower_health': self._get_tower_health
-        }
 
+        self.triggers = {
+            '_cheakTimeInBatlle': self._cheakTimeInBatlle,
+            '_getNumeberCrown': self._getNumeberCrown,
+            '_getTriggerOpenChest': self._getTriggerOpenChest,
+            '_getTriggerOpenedChest': self._getTriggerOpenedChest,
+            '_getTextError': self._getTextError,
+            '_getCardsInBatlle': self._getCardsInBatlle,
+            '_getElixir': self._getElixir,
+            '_get_tower_health': self._get_tower_health
+        }
 
     def _cheakTimeInBatlle(self):
         i = self.image.crop((450, 0, 538, 53))
 
     def _getNumeberCrown(self):
-        if self.image.getpixel((401, 462))[0:3] == (200, 111, 22) or self.image.getpixel((401, 462)) == (49, 54, 54, 255):
-            return 3
-        if self.image.getpixel((270, 448))[0:3] == (253, 162, 65) or self.image.getpixel((270, 448)) == (63, 66, 65, 255):
-            return 2
-        if self.image.getpixel((150, 453))[0:3] == (210, 116, 24) or self.image.getpixel((150, 453)) == (52, 55, 55, 255):
-            return 1
+        pixel_values = [
+            (200, 111, 22),  # Crown 3
+            (49, 54, 54, 255),  # Crown 3 (alternative color)
+            (253, 162, 65),  # Crown 2
+            (63, 66, 65, 255),  # Crown 2 (alternative color)
+            (210, 116, 24),  # Crown 1
+            (52, 55, 55, 255)  # Crown 1 (alternative color)
+        ]
+
+        for i, pixel in enumerate(pixel_values, start=1):
+            if self.image.getpixel((401, 462))[0:3] == pixel or self.image.getpixel((270, 448))[0:3] == pixel or self.image.getpixel((150, 453))[0:3] == pixel:
+                return i
+
         return 0
 
     def _getTriggerOpenChest(self):
-        Chests = [
-                self.image.crop((109, 833, 114, 838)),
-                self.image.crop((243, 833, 248, 838)),
-                self.image.crop((376, 833, 381, 838)),
-                self.image.crop((508, 833, 513, 838)),
-                ]
+        chest_positions = [
+            (109, 833, 114, 838),
+            (243, 833, 248, 838),
+            (376, 833, 381, 838),
+            (508, 833, 513, 838)
+        ]
 
         sumPixelChests = []
-        for image in Chests:
+        for pos in chest_positions:
+            image = self.image.crop(pos)
             width, height = image.size
             sumPixel = [0, 0, 0]
 
@@ -72,394 +69,143 @@ class ImageTriggers:
 
             sumPixelChests.append(sumPixel)
 
-        meanPixels = []
-        for sumPixelChest in sumPixelChests:
-            meanPixel = [sumPixelChest[0]/25, sumPixelChest[1]/25, sumPixelChest[2]/25]
-            meanPixels.append(meanPixel)
+        meanPixels = [[sumPixel[0]/25, sumPixel[1]/25, sumPixel[2]/25] for sumPixel in sumPixelChests]
 
-        indexChest = 0
-        for meanPixel in meanPixels:
-            indexChest += 1
-            if meanPixel[0] == 255.0:
-                if meanPixel[1] >= 216.0 and meanPixel[2] <= 255.0:
-                    if meanPixel[2] >= 74.0 and meanPixel[2] <= 112.1:
-                        return indexChest
+        for i, meanPixel in enumerate(meanPixels, start=1):
+            if meanPixel[0] == 255.0 and 216.0 <= meanPixel[1] <= 255.0 and 74.0 <= meanPixel[2] <= 150.0:
+                return i
 
-    def _getTriggerOpenedChest(self):
-        chestsPixel = [
-            self.image.getpixel((52, 701)),
-            self.image.getpixel((192, 718)),
-            self.image.getpixel((318, 701)),
-            self.image.getpixel((452, 701)),
-        ]
-
-        indexChest = 0
-        arrayChest = []
-        for pixel in chestsPixel:
-            indexChest += 1
-            if pixel[0:3] == (255, 255, 255):
-                arrayChest.append(indexChest)
-        if arrayChest != []:
-            return random.choice(arrayChest)
         return 0
 
+    def _getTriggerOpenedChest(self):
+        for trigger in triggers_json['triggerOpenChest']:
+            image = self.image.crop(trigger['position'])
+            if image.getdata() == trigger['image']:
+                return True
+
+        return False
+
     def _getTextError(self):
-        i = self.image.crop((40, 370, 495, 540))
-        return "Text Error"
+        image = self.image.crop((0, 0, 100, 100))
+
+        for trigger in triggers_json['triggerTextError']:
+            if image.getdata() == trigger['image']:
+                return trigger['text']
+
+        return ''
 
     def _getCardsInBatlle(self):
-        imageCards = [
-            self.image.crop((142, 815, 194, 871)),
-            self.image.crop((244, 815, 296, 871)),
-            self.image.crop((342, 815, 394, 871)),
-            self.image.crop((447, 815, 499, 871)),
-        ]
-
         cards = []
-        for card in imageCards:
-            card_ = card.resize((26, 28))
-            #card_ = recognitionCard.predict(card_)
-            cards.append(card_)
-            if True:
-                # pass
-                card.save(f'debug\\{card_}{time.time()}.png')
 
+        for trigger in triggers_json['triggerCardsInBatlle']:
+            image = self.image.crop(trigger['position'])
+            if image.getdata() == trigger['image']:
+                cards.append(trigger['card_name'])
 
         return cards
 
     def _getElixir(self):
-        elixir = self.image.crop((142, 912, 182, 940))
-        elixir = elixir.resize((20, 14))
-        #return recognitionElixir.predict(elixir)
+        elixir_positions = [
+            (52, 752, 56, 757),
+            (75, 752, 79, 757),
+            (98, 752, 102, 757),
+            (121, 752, 125, 757),
+            (144, 752, 148, 757),
+            (167, 752, 171, 757),
+            (190, 752, 194, 757),
+            (213, 752, 217, 757),
+            (236, 752, 240, 757),
+            (259, 752, 263, 757),
+            (282, 752, 286, 757),
+            (305, 752, 309, 757),
+            (328, 752, 332, 757),
+            (351, 752, 355, 757),
+            (374, 752, 378, 757),
+            (397, 752, 401, 757),
+            (420, 752, 424, 757),
+            (443, 752, 447, 757),
+            (466, 752, 470, 757),
+            (489, 752, 493, 757),
+            (512, 752, 516, 757),
+            (535, 752, 539, 757),
+            (558, 752, 562, 757),
+            (581, 752, 585, 757),
+            (604, 752, 608, 757),
+            (627, 752, 631, 757)
+        ]
+
+        elixir_count = 0
+
+        for pos in elixir_positions:
+            image = self.image.crop(pos)
+            if image.getpixel((2, 2)) == (160, 192, 255, 255):
+                elixir_count += 1
+
+        return elixir_count
 
     def _get_tower_health(self):
-        tower_healths = [
-                self.image.crop((247, 16, 322, 34)),
-                self.image.crop((104, 131, 153, 151)),
-                self.image.crop((389, 131, 436, 151)),
-                self.image.crop((273, 726, 323, 742)),
-                self.image.crop((104, 590, 145, 606)),
-                self.image.crop((386, 590, 430, 606)),
-                ]
-
-    def x(self):
-        slot = [self.image.getpixel((92, 815))[0:3] == (28, 109, 161),
-                self.image.getpixel((185, 815))[0:3] == (36, 125, 172),
-                self.image.getpixel((345, 815))[0:3] == (36, 125, 172),
-                self.image.getpixel((434, 815))[0:3] == (30, 110, 162),
-                ]
-
-        return slot
-
-    def x2(self):
-        slot = [
-            self.image.getpixel((113, 784))[0:3] == (202, 144, 18), self.image.getpixel((252, 784))[0:3] == (204, 148, 20),
-            self.image.getpixel((382, 784))[0:3] == (204, 146, 20), self.image.getpixel((516, 784))[0:3] == (204, 148, 20),
+        tower_health_positions = [
+            (151, 125, 152, 126),
+            (176, 125, 177, 126),
+            (201, 125, 202, 126),
+            (223, 125, 224, 126),
+            (248, 125, 249, 126),
+            (273, 125, 274, 126),
+            (297, 125, 298, 126),
+            (322, 125, 323, 126),
+            (346, 125, 347, 126),
+            (371, 125, 372, 126),
+            (396, 125, 397, 126),
+            (420, 125, 421, 126),
+            (445, 125, 446, 126),
+            (470, 125, 471, 126),
+            (494, 125, 495, 126),
+            (519, 125, 520, 126),
+            (543, 125, 544, 126),
+            (568, 125, 569, 126),
+            (592, 125, 593, 126),
+            (617, 125, 618, 126)
         ]
-        return slot
 
-    def getTrigger(self, img):
+        tower_health = 0
 
-        self.image = Image.open(io.BytesIO(img))
+        for pos in tower_health_positions:
+            image = self.image.crop(pos)
+            if image.getpixel((0, 0)) == (254, 254, 254, 255):
+                tower_health += 1
 
-        for trigger in triggers_json:
-            сompleted_trigger = True
-            triggers = []
+        return tower_health
 
-            for data in triggers_json[trigger]["trigger"]:
-                triggers.append((data["coordinates"], data["pixels"]))
+    def process_image(self, image_data):
+        image = Image.open(io.BytesIO(image_data))
+        self.image = image.convert('RGB')
 
-            for data_triggers in triggers:
-                if (list(self.image.getpixel((data_triggers[0][0], data_triggers[0][1]))[0:3]) in data_triggers[1]) == False:
-                    сompleted_trigger = False
+        for trigger_name, trigger_func in self.triggers.items():
+            if self.debug:
+                logger.info(f"Trigger: {trigger_name}")
+                start_time = time.time()
 
-            if сompleted_trigger:
-                return int(trigger), None
+            result = trigger_func()
 
-        #if self.image.getpixel((98, 1050))[0:3] == ((255, 255, 255), (239, 239, 239)):  # тригер на облачко
+            if self.debug:
+                elapsed_time = time.time() - start_time
+                logger.info(f"Result: {result}")
+                logger.info(f"Elapsed time: {elapsed_time} seconds")
 
-        #    if self.image.getpixel((709, 1243))[0:3] in ((6, 67, 134)) :  # тригер нижнию часть экрана
-        #        return 100, None # self._getElixir(), self._getCardsInBatlle()  # тригер на бой
+        return None
 
-        #    if self.image.getpixel((405,1140))[0:3] == (78, 175, 255):  # тригер на кнопку выйти
-        #        if self.index2X2:
-        #            self.index2X2 = False
-        #            return 121, self._getNumeberCrown()  # тригер на закрытие чата в после боя 2х2
-        #        else:
-        #            self.index2X2 = True
-        #            return 124, None  # тригер на конец боя 1х1
 
-        if self.image.getpixel((146,1219))[0:3] == ((71, 161, 239)):  # тригер нижнию часть экрана при игре 2х2
-            if self.index2X2:
-                self.index2X2 = False
-                return 122, self._getNumeberCrown()  # тригер на закрытие чата в после боя 2х2
-            else:
-                self.index2X2 = True
-                return 124, None  # тригер на конец боя 2х2
+def main():
+    open_chest = random.choice([True, False])
+    requested_card = random.choice(['Card1', 'Card2', 'Card3'])
+    open_PR = random.choice([True, False])
+    debug = False  # Set to True to enable debug logs
 
-        if self.image.getpixel((40, 790))[0:3] == (255, 255, 255):
-            return 124, None
+    image_data = open("image.png", "rb").read()
 
-        if self.image.getpixel((170, 856))[0:3] == (8, 94, 178):
-            return 125, None
+    triggers = ImageTriggers(open_chest, requested_card, open_PR, debug)
+    triggers.process_image(image_data)
 
-        self.index2X2 = False
 
-        if self.image.getpixel((17, 922))[0:3] == (78, 115, 149):
-            if self.image.getpixel((63, 830))[0:3] == (255, 255, 255):
-                return 237, None
-
-        if self.image.getpixel((440, 220))[0:3] == (236, 8, 56):
-                return 229, None
-
-        if self.image.getpixel((236, 256)) == (31, 70, 124, 255):
-            return 2003, None
-
-
-        if self.image.getpixel((125, 238)) == (192, 164, 124, 255):
-            if self.image.getpixel((235, 407)) in ((255, 230, 141, 255), (255, 230, 140, 255)):
-                return 2005, None
-            if self.image.getpixel((235, 544)) in ((255, 230, 141, 255), (255, 230, 140, 255)):
-                return 2006, None
-            if self.image.getpixel((235, 683)) in ((255, 230, 141, 255), (255, 230, 140, 255)):
-                return 2007, None
-            if self.image.getpixel((220, 644)) in ((255, 230, 141, 255), (255, 230, 140, 255)):
-                return 2008, None
-            return 2004, None
-
-        if self.image.getpixel((709, 1265))[0:3] in((64, 76, 95), (63, 75, 95), (60, 71, 89), (33, 36, 63), (63, 75, 94), (59, 70, 88)):  # пиксель на кропку эвента если она не активка
-
-            #if self.image.getpixel((652, 447)) == (174, 96, 0, 255):
-            #    return 2001, None
-
-            #if self.image.getpixel((91, 446)) == (200, 123, 4, 255):
-            #    return 2002, None
-
-            if self.image.getpixel((360, 679))[0:3] in ((236, 8, 56), (236, 8, 57), (236, 9, 56), (236, 9, 57)):
-                return 209, None
-
-            if self.image.getpixel((42, 214))[0:3] == (76, 175, 255):
-                return 202, None
-
-            if self.image.getpixel((270, 70))[0:3] == (226, 226, 226):
-                return 216, None
-
-            if self.image.getpixel((263, 627))[0:3] == (224, 209, 175):
-                return 239, None
-
-            if self.image.getpixel((473, 716))[0:3] == (191, 194, 201):
-                return 260, None
-
-            if self.image.getpixel((474, 652))[0:3] == (84, 136, 223):
-                return 261, None
-
-            if self.image.getpixel((62, 70))[0:3] == (228, 220, 229) or self.image.getpixel((62, 70))[0:3] == (228, 220, 230):
-                return 215, self.x2()  # Триггер на окно кв
-
-            if self.image.getpixel((501, 812))[0:3] == (76, 172, 255):
-                return 212, None  # триггер на чат клана
-
-            if self.image.getpixel((63, 877))[0:3] == (236, 8, 56):
-                return 236, None  # триггер на ежедневную награду
-
-            if self.image.getpixel((10, 955))[0:3] == (234, 189, 80):
-                return 238, None
-
-            if self.image.getpixel((478, 151))[0:3] in ((224, 244, 255), (210, 229, 239)):  # триггер на нахождение в меню
-                if self.image.getpixel((433, 887))[0:3] == (48, 184, 69) and self.requested_card:
-                    return 210, None  # тригер на отправку запроса карт
-                if self.image.getpixel((433, 887))[0:3] == (236, 8, 56) and self.requested_card:
-                    return 211, None  # триггер на сообщение в чате
-
-                if self._getTriggerOpenChest() and self.open_chest:
-                    return 220 + self._getTriggerOpenChest(), None
-
-                if self._getTriggerOpenedChest() and self.open_chest:
-                    return 230 + self._getTriggerOpenedChest(), None
-
-                if (self.image.getpixel((511, 218))[0:3] in ((240, 168, 0), (241, 168, 0), (242, 168, 0), (243, 168, 0), (244, 168, 0))) and self.open_PR:  # триггер на пасс рояль
-                    return 235, None
-
-                if self.image.getpixel((268, 800)) == (255, 255, 255):
-                    return 218
-
-                return 200, self.x()  # тригер на меню
-
-        if self.image.getpixel((47, 539))[0:3] == (7, 49, 74) or self.image.getpixel((47, 539))[0:3] == (8, 55, 83):
-            return 225, None
-
-        if self.image.getpixel((273, 122))[0:3] == (51, 203, 254):
-            return 226, None
-
-        if self.image.getpixel((267, 431))[0:3] == (255, 200, 88):  # пиксель всплывающего окна лимита
-            return 250, None  # тригер на лимит наград
-
-        if self.image.getpixel((30, 924))[0:3] == (73, 86, 108):
-            if self.image.getpixel((271, 930))[0:3] == (78, 175, 255):
-                if self.image.getpixel((271, 930))[0:3] == (78, 175, 255):
-                    arrayPixel = self.image.crop((404, 340, 405, 800))
-                    for index in range(450):
-                        pixel = arrayPixel.getpixel((0, index))[0:3]
-                        if pixel == (248, 253, 248) or pixel == (152, 184, 155) or pixel == (248, 253, 249):
-                            return 280, 404, index + 350
-
-                    arrayPixel = self.image.crop((137, 340, 138, 800))
-                    for index in range(450):
-                        pixel = arrayPixel.getpixel((0, index))[0:3]
-                        if pixel == (248, 253, 248) or pixel == (152, 184, 155) or pixel == (248, 253, 249):
-                            return 280, 137, index + 350
-
-                    arrayPixel = self.image.crop((200, 340, 201, 800))
-                    for index in range(450):
-                        pixel = arrayPixel.getpixel((0, index))[0:3]
-                        if pixel[0] >= 107 and pixel[0] <= 148 and pixel[1] >= 233 and pixel[1] <= 255 and pixel[2] >= 117 and pixel[2] <= 156:
-                            return 280, 200, index + 350
-
-                    arrayPixel = self.image.crop((400, 340, 401, 800))
-                    for index in range(450):
-                        pixel = arrayPixel.getpixel((0, index))[0:3]
-                        if pixel[0] >= 107 and pixel[0] <= 148 and pixel[1] >= 233 and pixel[1] <= 255 and pixel[2] >= 117 and pixel[2] <= 156:
-                            return 280, 400, index + 350
-
-        if self.image.getpixel((107, 152))[0:3] == (242, 247, 249):
-            for i in range(4):
-                arrayPixel = self.image.crop((90 + 120 * i, 300, 91 + 120 * i, 850))
-                for index in range(530):
-                    pixel = arrayPixel.getpixel((0, index))[0:3]
-                    if pixel == (255, 203, 85):
-                        return 281, 90 + 120 * i, index + 320
-
-        if self.image.getpixel((500, 150))[0:3] == (97, 104, 124):
-            if self.image.getpixel((500, 236))[0:3] == (179, 211, 234):
-                return 219, None
-
-        if self.image.getpixel((436, 297))[0:3] == (50, 27, 99, 255):
-            return 289
-
-        if self.image.getpixel((264, 180))[0:3] == (100, 196, 255) or self.image.getpixel((264, 122))[0:3] == (100, 196, 255):
-            if self.image.getpixel((261, 705))[0:3] == (149, 254, 236):
-                return 291, None
-
-            if self.image.getpixel((292, 498))[0:3] == (149, 254, 236):
-                return 292, None
-
-            if self.image.getpixel((265, 625))[0:3] == (251, 221, 125):
-                return 293, None
-
-            if self.image.getpixel((324, 756))[0:3] == (222, 165, 255):
-                return 294, None
-
-            return 290, None
-
-
-
-
-        if self.image.getpixel((442, 906))[0:3] == (154, 205, 255):
-            return 300, None  # тригер на пиксель экрана поиска боя
-
-        if self.image.getpixel((14, 945))[0:3] == (24, 113, 216):
-            return 301, None  # тригер на пиксель экрана загрузки
-
-        if self.image.getpixel((280, 500))[0:3] == (66, 66, 66):  # пиксель всплывающего окна
-            if self.image.getpixel((285, 495))[0:3] == (66, 66, 66):
-                return 400, self._getTextError()  # тригер на потерю соединения либо подключения другого устройства
-
-        return 0, None  # В случае если не нашел тригеров
-
-    def getTriggerDEBUG(self, img):
-        self.image = Image.open(io.BytesIO(img))
-
-        if self.image.size == (1280, 720):
-            return ((500, None),)
-        elif self.image.size != (720, 1280):
-            return ((501, None),)
-
-
-        print(self.image.getpixel((235, 407)), 2001)
-        print(self.image.getpixel((235, 407)), 2002) # ОБЛАКО
-        print(self.image.getpixel(((220, 407))), 2002) # ОБЛАКО
-
-        with open("config/trigger.json", encoding='UTF-8') as f:
-            triggers_json = json.load(f)
-
-        data_json = []
-
-        for trigger in triggers_json:
-            сompleted_trigger = 1
-            triggers = []
-
-            for data in triggers_json[trigger]["trigger"]:
-                triggers.append((data["coordinates"], data["pixels"]))
-
-            for data in triggers:
-                print('trigger'
-                , trigger
-                , 'pixel'
-                , data[0]
-                , 'coord'
-                , data[1]
-                , triggers_json[trigger]["func"]
-                , self.image.getpixel((data[0][0], data[0][1]))
-                , data[1][:]
-                , list(self.image.getpixel((data[0][0], data[0][1]))[0:3]) in data[1])
-
-                data_json.append(('trigger'
-                              , trigger
-                              , 'pixel'
-                              , data[0]
-                              , 'coord'
-                              , data[1]
-                              , triggers_json[trigger]["func"]
-                              , self.image.getpixel((data[0][0], data[0][1]))
-                              , data[1][:]
-                              , list(self.image.getpixel((data[0][0], data[0][1]))[0:3]) in data[1])
-                      )
-
-            if not list(self.image.getpixel((data[0][0], data[0][1]))[0:3]) in data[1]:
-                сompleted_trigger = 0
-
-            if сompleted_trigger == 1:
-                pass
-
-
-        #try:
-        #    self.image.save(f'debug\\{time.time()}.png')
-        #except:
-        #    os.mkdir('debug')
-        #    self.image.save(f'debug\\{time.time()}.png')
-
-        return( data_json,
-            (100, self.image.getpixel((529, 950)), self.image.getpixel((529, 950))[0:3] == (7, 71, 144)),
-            (121, self.image.getpixel((300, 840)), self.image.getpixel((300, 840))[0:3] == (104, 187, 255)),
-            (124, self.image.getpixel((40, 790)), self.image.getpixel((40, 790))[0:3] == (255, 255, 255)),
-            (125, self.image.getpixel((170, 856)), self.image.getpixel((170, 856))[0:3] == (8, 94, 178)),
-            (200, self.image.getpixel((530, 944)), self.image.getpixel((530, 944))[0:3] == (64, 76, 95)),
-            (202, self.image.getpixel((478, 216)), self.image.getpixel((478, 216))[0:3] == (76, 173, 255)),
-            (209, self.image.getpixel((360, 679)), self.image.getpixel((522, 679))[0:3] == (236, 9, 56)),
-            (200, self.image.getpixel((514, 28)), self.image.getpixel((514, 28))[0:3] == (72, 208, 25)),
-            (210, self.image.getpixel((435, 876)), self.image.getpixel((435, 876))[0:3] == (48, 185, 71)),
-            (211, self.image.getpixel((435, 876)), self.image.getpixel((435, 876))[0:3] == (236, 8, 56)),
-            (212, self.image.getpixel((501, 812)), self.image.getpixel((501, 812))[0:3] == (76, 172, 255)),
-            (215, self.image.getpixel((62, 70)), self.image.getpixel((62, 70))[0:3] == (228, 220, 229)),
-            (216, self.image.getpixel((270, 70)), self.image.getpixel((270, 70))[0:3] == (226, 226, 226)),
-            (219, self.image.getpixel((500, 150)), self.image.getpixel((500, 150))[0:3] == (97, 104, 124)),
-            (225, self.image.getpixel((47, 539)), self.image.getpixel((47, 539))[0:3] == (8, 55, 83)),
-            (225, self.image.getpixel((47, 539)), self.image.getpixel((47, 539))[0:3] == (7, 49, 74)),
-            (226, self.image.getpixel((273, 122)), self.image.getpixel((273, 122))[0:3] == (51, 203, 254)),
-            (235, self.image.getpixel((511, 218)), self.image.getpixel((511, 218))[0:3] in ((240, 168, 0), (241, 168, 0), (242, 168, 0), (243, 168, 0), (244, 168, 0))),
-            (236, self.image.getpixel((63, 877)), self.image.getpixel((63, 877))[0:3] == (236, 8, 56)),
-            (237, self.image.getpixel((17, 922)), self.image.getpixel((17, 922))[0:3] == (78, 115, 149)),
-            (250, self.image.getpixel((267, 431)), self.image.getpixel((267, 431))[0:3] == (255, 200, 88)),
-            (260, self.image.getpixel((473, 716)), self.image.getpixel((473, 716))[0:3] == (191, 194, 201)),
-            (289, self.image.getpixel((436, 297)), self.image.getpixel((436, 297))[0:3] == (50, 27, 99)),
-            (290, self.image.getpixel((264, 180)), self.image.getpixel((264, 180))[0:3] == (100, 196, 255)),
-            (290, self.image.getpixel((264, 122)), self.image.getpixel((264, 122))[0:3] == (100, 196, 255)),
-            (291, self.image.getpixel((261, 705)), self.image.getpixel((261, 705))[0:3] == (149, 254, 236)),
-            (292, self.image.getpixel((292, 498)), self.image.getpixel((292, 498))[0:3] == (149, 254, 236)),
-            (293, self.image.getpixel((265, 625)), self.image.getpixel((265, 625))[0:3] == (251, 221, 125)),
-            (300, self.image.getpixel((442, 906)), self.image.getpixel((442, 906))[0:3] == (154, 205, 255)),
-            (301, self.image.getpixel((14, 945)), self.image.getpixel((14, 945))[0:3] == (24, 113, 216)),
-            (400, self.image.getpixel((280, 500)), self.image.getpixel((280, 500))[0:3] == (66, 66, 66)),
-            self.image.size,
-            self.getTrigger(img),
-        )
+if __name__ == '__main__':
+    main()
